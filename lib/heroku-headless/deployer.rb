@@ -7,6 +7,10 @@ module HerokuHeadless
     include DocumentsActions
     include TalksToHeroku
 
+    def self.logger=(logger)
+      @@logger = logger
+    end
+
     def self.deploy(app_name)
       new(app_name,CreatesUIDs.generate_uid).deploy
     end
@@ -21,12 +25,17 @@ module HerokuHeadless
       setup_ssh_key
       result = do_action('push git to heroku'){ push_head_to_app }
       result = result && do_action('post_deploy_hooks'){ run_post_deploy_hooks }
+      result = result && do_action('put config vars') { put_config_vars } if HerokuHeadless.configuration.post_deploy_vars
       result
     ensure
       cleanup
     end
 
     private
+
+    def put_config_vars
+      heroku.put_config_vars(@app_name, HerokuHeadless.configuration.post_deploy_vars)
+    end
 
     def prep_temp_dir
       @tmpdir = Pathname.new( Dir.tmpdir ).join('heroku-deployer').join(@uid)
@@ -53,6 +62,7 @@ module HerokuHeadless
 
     def ssh_key_path
       @tmpdir.join('id_rsa')
+      #Pathname.new("/home/polar/.ssh/id_rsa")
     end
 
     def ssh_key_name
@@ -61,10 +71,13 @@ module HerokuHeadless
 
     def public_ssh_key
       ssh_key_path.sub_ext('.pub').read
+     # File.new("/home/polar/.ssh/id_rsa.pub").read
     end
 
     def add_ssh_key
+      print "BEFORE #{heroku.get_keys.inspect}"
       heroku.post_key(public_ssh_key)
+      print "AFTER #{heroku.get_keys.inspect}"
     end
 
     def remove_ssh_key
@@ -88,7 +101,12 @@ module HerokuHeadless
     end
 
     def push_git
-      system( {'GIT_SSH'=>custom_git_ssh_path.to_s}, git_push_command )
+      print "#{{'GIT_SSH'=>custom_git_ssh_path.to_s}.inspect}, #{git_push_command}\n"
+      #system( {'GIT_SSH'=>custom_git_ssh_path.to_s}, git_push_command )
+      Open3.popen2e({'GIT_SSH'=>custom_git_ssh_path.to_s}, git_push_command) do |stdin, out, wait_thr|
+        pid = wait_thr.pid
+        out.each {|line| @@logger.log line}  if @@logger
+      end
     end
 
     def git_push_command
