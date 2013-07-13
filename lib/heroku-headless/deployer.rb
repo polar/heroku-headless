@@ -11,8 +11,8 @@ module HerokuHeadless
       @@logger = logger
     end
 
-    def self.deploy(app_name)
-      new(app_name,CreatesUIDs.generate_uid).deploy
+    def self.deploy(app_name, commit = "HEAD")
+      new(app_name,CreatesUIDs.generate_uid).deploy(commit)
     end
 
     def initialize( app_name, uid )
@@ -20,10 +20,10 @@ module HerokuHeadless
       @uid = uid
     end
 
-    def deploy
+    def deploy(commit = "HEAD")
       prep_temp_dir
       setup_ssh_key
-      result = do_action('push git to heroku'){ push_head_to_app }
+      result = do_action('push git to heroku'){ push_head_to_app(commit) }
       result = result && do_action('post_deploy_hooks'){ run_post_deploy_hooks }
       result = result && do_action('put config vars') { put_config_vars } if HerokuHeadless.configuration.post_deploy_vars
       result
@@ -84,10 +84,10 @@ module HerokuHeadless
       heroku.delete_key(ssh_key_name)
     end
 
-    def push_head_to_app
+    def push_head_to_app(commit = "HEAD")
       setup_custom_git_ssh
       run_pre_deploy_git_commands
-      push_git
+      push_git(commit)
     end
 
     def setup_custom_git_ssh
@@ -100,19 +100,19 @@ module HerokuHeadless
      custom_git_ssh_path.chmod( 0740 )
     end
 
-    def push_git
-      print "#{{'GIT_SSH'=>custom_git_ssh_path.to_s}.inspect}, #{git_push_command}\n"
+    def push_git(commit = "HEAD")
+      print "#{{'GIT_SSH'=>custom_git_ssh_path.to_s}.inspect}, #{git_push_command(commit)}\n"
       #system( {'GIT_SSH'=>custom_git_ssh_path.to_s}, git_push_command )
-      Open3.popen2e({'GIT_SSH'=>custom_git_ssh_path.to_s}, git_push_command) do |stdin, out, wait_thr|
+      Open3.popen2e({'GIT_SSH'=>custom_git_ssh_path.to_s}, git_push_command(commit)) do |stdin, out, wait_thr|
         pid = wait_thr.pid
         out.each {|line| @@logger.log line}  if @@logger
       end
     end
 
-    def git_push_command
+    def git_push_command(commit = "HEAD")
       cmd = "git push "
       cmd << "-f " if HerokuHeadless.configuration.force_push
-      cmd << "git@heroku.com:#{@app_name}.git HEAD:master"
+      cmd << "git@heroku.com:#{@app_name}.git #{commit}:master"
     end
 
     def run_pre_deploy_git_commands
