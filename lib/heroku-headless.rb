@@ -25,6 +25,7 @@ module HerokuHeadless
 
   class Configuration
     attr_accessor :mock_mode, :pre_deploy_git_commands, :post_deploy_commands, :force_push, :post_deploy_vars
+    attr_accessor :repository_location
 
     def initialize
       @post_deploy_vars = nil
@@ -32,6 +33,7 @@ module HerokuHeadless
       @post_deploy_commands = []
       @force_push ||= false
       @mock_mode ||= false
+      @repository_location = nil
     end
   end
 end

@@ -110,7 +110,9 @@ module HerokuHeadless
     end
 
     def git_push_command(commit = "HEAD")
-      cmd = "git push "
+      cmd = ""
+      cmd << "cd #{HerokuHeadless.configuration.repository_location};" if HerokuHeadless.configuration.repository_location
+      cmd << "git push "
       cmd << "-f " if HerokuHeadless.configuration.force_push
       cmd << "git@heroku.com:#{@app_name}.git #{commit}:master"
     end
